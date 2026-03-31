@@ -1,12 +1,1124 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AlgoKit React Template</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VaultChain — Algorand Savings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/algosdk/2.7.0/algosdk.min.js"></script>
+<style>
+  :root {
+    --black: #080808;
+    --deep: #0d0d0d;
+    --card: #121212;
+    --border: #1e1e1e;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --gold-dim: #7a6330;
+    --platinum: #e8e8e8;
+    --silver: #a0a0a0;
+    --muted: #555;
+    --green: #3ddc97;
+    --red: #ff6b6b;
+    --blue: #5b9cf6;
+    --glow: rgba(201,168,76,0.15);
+    --glow-strong: rgba(201,168,76,0.35);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--black);
+    color: var(--platinum);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -30%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 900px;
+    height: 600px;
+    background: radial-gradient(ellipse, rgba(201,168,76,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Noise texture */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,8,8,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2.5rem;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--gold-light);
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 0 20px var(--glow-strong);
+  }
+  .logo span { color: var(--silver); font-weight: 300; }
+
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  .network-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    padding: 4px 10px;
+    border: 1px solid var(--gold-dim);
+    border-radius: 20px;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+    background: rgba(201,168,76,0.05);
+  }
+
+  .btn {
+    cursor: pointer;
+    border: none;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--gold), #a87c28);
+    color: #000;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    box-shadow: 0 4px 20px rgba(201,168,76,0.25);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(201,168,76,0.4); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--silver);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+  }
+  .btn-ghost:hover { border-color: var(--gold-dim); color: var(--gold); background: rgba(201,168,76,0.05); }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 5rem;
+  }
+
+  /* ── CONNECT SCREEN ── */
+  #connect-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 64px);
+    text-align: center;
+    gap: 2rem;
+    padding: 2rem;
+  }
+
+  .vault-hero {
+    position: relative;
+    width: 140px; height: 140px;
+    margin: 0 auto 1rem;
+  }
+  .vault-circle {
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: 2px solid var(--gold-dim);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3.5rem;
+    background: radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%);
+    animation: pulse-ring 3s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.15), 0 0 40px rgba(201,168,76,0.08); }
+    50% { box-shadow: 0 0 0 20px rgba(201,168,76,0), 0 0 60px rgba(201,168,76,0.15); }
+  }
+
+  .hero-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 3.2rem;
+    font-weight: 300;
+    line-height: 1.1;
+    color: var(--platinum);
+    letter-spacing: -0.01em;
+  }
+  .hero-title em { color: var(--gold-light); font-style: normal; }
+  .hero-sub {
+    color: var(--silver);
+    font-size: 1rem;
+    font-weight: 300;
+    max-width: 420px;
+    line-height: 1.7;
+  }
+
+  .connect-features {
+    display: flex;
+    gap: 2rem;
+    list-style: none;
+    padding: 1.5rem 2.5rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  .connect-features li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--silver);
+    letter-spacing: 0.02em;
+  }
+  .connect-features li span:first-child { font-size: 1.4rem; }
+
+  .btn-connect-large {
+    background: linear-gradient(135deg, var(--gold), #a87c28);
+    color: #000;
+    padding: 14px 40px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    box-shadow: 0 6px 30px rgba(201,168,76,0.3);
+    transition: all 0.25s;
+  }
+  .btn-connect-large:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(201,168,76,0.45); }
+
+  .connect-disclaimer {
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── DASHBOARD ── */
+  #dashboard { display: none; }
+
+  /* Wallet bar */
+  .wallet-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .wallet-info { display: flex; align-items: center; gap: 12px; }
+  .wallet-avatar {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #000;
+  }
+  .wallet-addr {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--silver);
+  }
+  .wallet-addr strong { color: var(--platinum); font-weight: 500; display: block; font-size: 0.7rem; margin-bottom: 2px; }
+  .wallet-balance-pill {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(201,168,76,0.07);
+    border: 1px solid var(--gold-dim);
+    border-radius: 8px;
+    padding: 8px 16px;
+  }
+  .wallet-balance-pill .label { font-size: 0.7rem; color: var(--silver); font-family: 'DM Mono', monospace; }
+  .wallet-balance-pill .value { font-family: 'DM Mono', monospace; font-size: 1rem; color: var(--gold-light); font-weight: 500; }
+
+  /* Grid */
+  .dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 1.5rem;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: #2a2a2a; }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(201,168,76,0.03), transparent 60%);
+    pointer-events: none;
+  }
+
+  .card-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Total Savings card (span 2) */
+  .card-savings { grid-column: span 2; }
+
+  .savings-amount {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 3.8rem;
+    font-weight: 600;
+    color: var(--gold-light);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+  }
+  .savings-unit { font-size: 1.8rem; color: var(--gold-dim); }
+  .savings-usd { font-size: 0.85rem; color: var(--silver); margin-bottom: 1.5rem; font-family: 'DM Mono', monospace; }
+
+  /* Progress bar */
+  .progress-section { margin-top: 1rem; }
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .progress-label { font-size: 0.75rem; color: var(--silver); }
+  .progress-pct { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--gold); }
+  .progress-track {
+    height: 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--gold-dim), var(--gold-light));
+    transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 10px rgba(201,168,76,0.5);
+  }
+  .milestone-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* Deposit card */
+  .card-deposit { grid-column: span 1; }
+
+  .input-group { margin-bottom: 1rem; }
+  .input-label { font-size: 0.72rem; color: var(--silver); margin-bottom: 6px; display: block; font-family: 'DM Mono', monospace; }
+  .input-wrap { position: relative; }
+  .algo-input {
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 48px 11px 14px;
+    color: var(--platinum);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .algo-input:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(201,168,76,0.08); }
+  .input-unit {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .quick-amounts {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .quick-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--silver);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .quick-btn:hover { border-color: var(--gold-dim); color: var(--gold); background: rgba(201,168,76,0.05); }
+
+  .btn-deposit {
+    width: 100%;
+    background: linear-gradient(135deg, var(--gold), #a87c28);
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(201,168,76,0.2);
+  }
+  .btn-deposit:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(201,168,76,0.35); }
+  .btn-deposit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Stats cards */
+  .card-stat { grid-column: span 1; }
+  .stat-big {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: var(--platinum);
+    margin-bottom: 4px;
+    line-height: 1;
+  }
+  .stat-sub { font-size: 0.75rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+  /* Milestones */
+  .card-milestones { grid-column: span 2; }
+
+  .milestones-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 1rem;
+  }
+  .milestone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    text-align: center;
+    transition: all 0.3s;
+    background: rgba(255,255,255,0.01);
+    cursor: default;
+  }
+  .milestone.unlocked {
+    border-color: var(--gold-dim);
+    background: rgba(201,168,76,0.05);
+    animation: milestone-glow 0.6s ease;
+  }
+  @keyframes milestone-glow {
+    0% { box-shadow: 0 0 0 0 rgba(201,168,76,0.6); }
+    50% { box-shadow: 0 0 30px 10px rgba(201,168,76,0.3); }
+    100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+  }
+  .milestone-badge {
+    font-size: 1.8rem;
+    filter: grayscale(1) opacity(0.3);
+    transition: filter 0.4s;
+  }
+  .milestone.unlocked .milestone-badge { filter: none; }
+  .milestone-name {
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-family: 'DM Mono', monospace;
+    transition: color 0.3s;
+  }
+  .milestone.unlocked .milestone-name { color: var(--gold); }
+  .milestone-threshold {
+    font-size: 0.6rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+  }
+  .milestone.unlocked .milestone-threshold { color: var(--gold-dim); }
+
+  /* History */
+  .card-history { grid-column: span 3; }
+
+  .history-list { margin-top: 1rem; }
+  .history-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-family: 'DM Mono', monospace;
+  }
+  .tx-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.015);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    animation: slide-in 0.35s ease;
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .tx-item:hover { border-color: var(--border); background: rgba(255,255,255,0.03); }
+
+  .tx-left { display: flex; align-items: center; gap: 12px; }
+  .tx-icon {
+    width: 34px; height: 34px;
+    background: rgba(61,220,151,0.1);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+    color: var(--green);
+    flex-shrink: 0;
+  }
+  .tx-meta strong { display: block; font-size: 0.82rem; color: var(--platinum); font-weight: 500; }
+  .tx-meta span { font-size: 0.7rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .tx-amount { font-family: 'DM Mono', monospace; font-size: 0.9rem; color: var(--green); font-weight: 500; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 0.85rem;
+    color: var(--platinum);
+    z-index: 999;
+    opacity: 0;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--green); }
+  #toast.error { border-color: var(--red); }
+
+  /* Spinner */
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,0,0,0.3);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Loading overlay */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(8,8,8,0.85);
+    backdrop-filter: blur(10px);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .loading-overlay.active { opacity: 1; pointer-events: all; }
+  .loading-ring {
+    width: 50px; height: 50px;
+    border: 3px solid rgba(201,168,76,0.2);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .loading-text { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--silver); }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .dash-grid { grid-template-columns: 1fr 1fr; }
+    .card-savings { grid-column: span 2; }
+    .card-deposit { grid-column: span 1; }
+    .card-stat { grid-column: span 1; }
+    .card-milestones { grid-column: span 2; }
+    .card-history { grid-column: span 2; }
+    .milestones-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .dash-grid { grid-template-columns: 1fr; }
+    .card-savings, .card-deposit, .card-stat, .card-milestones, .card-history { grid-column: span 1; }
+    .milestones-grid { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 0 1.2rem; }
+    main { padding: 1.5rem 1rem; }
+    .savings-amount { font-size: 2.8rem; }
+    .connect-features { flex-direction: column; gap: 1rem; align-items: flex-start; }
+    .hero-title { font-size: 2.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏛</div>
+    VaultChain <span>&nbsp;/ Algorand</span>
+  </div>
+  <div class="header-right">
+    <div class="network-badge">TESTNET</div>
+    <button class="btn btn-ghost" id="disconnect-btn" style="display:none" onclick="disconnect()">Disconnect</button>
+  </div>
+</header>
+
+<!-- CONNECT SCREEN -->
+<div id="connect-screen">
+  <div class="vault-hero">
+    <div class="vault-circle">🏛</div>
+  </div>
+  <div>
+    <h1 class="hero-title">Your <em>Savings Vault</em><br>on Algorand</h1>
+  </div>
+  <p class="hero-sub">Build disciplined savings habits. Every deposit is secured on-chain. Track milestones. Build wealth — transparently.</p>
+  <ul class="connect-features">
+    <li><span>🔐</span><span>Non-custodial</span></li>
+    <li><span>⚡</span><span>Instant settlement</span></li>
+    <li><span>🏆</span><span>Milestone badges</span></li>
+    <li><span>📊</span><span>On-chain history</span></li>
+  </ul>
+  <button class="btn-connect-large" onclick="connectWallet()">
+    🔌 Connect Wallet
+  </button>
+  <p class="connect-disclaimer">Algorand TestNet · Pera Wallet simulation · No real funds</p>
+</div>
+
+<!-- DASHBOARD -->
+<main id="dashboard">
+
+  <!-- Wallet bar -->
+  <div class="wallet-bar">
+    <div class="wallet-info">
+      <div class="wallet-avatar" id="wallet-avatar">A</div>
+      <div>
+        <div class="wallet-addr">
+          <strong>Connected Wallet</strong>
+          <span id="wallet-addr-display">—</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <div class="wallet-balance-pill">
+        <span class="label">WALLET BALANCE</span>
+        <span class="value" id="wallet-balance-display">— ALGO</span>
+      </div>
+      <button class="btn btn-ghost" onclick="refreshData()" id="refresh-btn">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+
+    <!-- Savings Total -->
+    <div class="card card-savings">
+      <div class="card-label">Total Vault Balance</div>
+      <div class="savings-amount"><span id="vault-balance">0.000</span> <span class="savings-unit">ALGO</span></div>
+      <div class="savings-usd" id="vault-usd">≈ $0.00 USD</div>
+      <div class="progress-section">
+        <div class="progress-header">
+          <span class="progress-label" id="next-milestone-label">Next milestone: Saver (10 ALGO)</span>
+          <span class="progress-pct" id="progress-pct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="milestone-label" id="milestone-status">0 / 10 ALGO to unlock Saver badge</div>
+      </div>
+    </div>
+
+    <!-- Deposit -->
+    <div class="card card-deposit">
+      <div class="card-label">Make a Deposit</div>
+      <div class="input-group">
+        <label class="input-label">AMOUNT</label>
+        <div class="input-wrap">
+          <input type="number" class="algo-input" id="deposit-amount" placeholder="0.00" min="0.1" step="0.1">
+          <span class="input-unit">ALGO</span>
+        </div>
+      </div>
+      <div class="quick-amounts">
+        <button class="quick-btn" onclick="setAmount(1)">1</button>
+        <button class="quick-btn" onclick="setAmount(5)">5</button>
+        <button class="quick-btn" onclick="setAmount(10)">10</button>
+        <button class="quick-btn" onclick="setAmount(25)">25</button>
+        <button class="quick-btn" onclick="setAmount(50)">50</button>
+      </div>
+      <button class="btn-deposit" id="deposit-btn" onclick="deposit()">
+        <div class="spinner" id="deposit-spinner"></div>
+        <span id="deposit-btn-text">⬆ Deposit to Vault</span>
+      </button>
+    </div>
+
+    <!-- Stat: Total Deposits -->
+    <div class="card card-stat">
+      <div class="card-label">Total Deposits</div>
+      <div class="stat-big" id="stat-deposits">0</div>
+      <div class="stat-sub">transactions</div>
+    </div>
+
+    <!-- Stat: Avg deposit -->
+    <div class="card card-stat">
+      <div class="card-label">Average Deposit</div>
+      <div class="stat-big" id="stat-avg">—</div>
+      <div class="stat-sub">ALGO per deposit</div>
+    </div>
+
+    <!-- Stat: Streak -->
+    <div class="card card-stat">
+      <div class="card-label">Streak Days</div>
+      <div class="stat-big" id="stat-streak">1</div>
+      <div class="stat-sub">consecutive days 🔥</div>
+    </div>
+
+    <!-- Milestones -->
+    <div class="card card-milestones">
+      <div class="card-label">Milestone Badges</div>
+      <div class="milestones-grid" id="milestones-grid"></div>
+    </div>
+
+    <!-- History -->
+    <div class="card card-history">
+      <div class="card-label">Deposit History</div>
+      <div class="history-list" id="history-list">
+        <div class="history-empty">No deposits yet. Make your first deposit above.</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-ring"></div>
+  <div class="loading-text" id="loading-text">Processing transaction...</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//   VAULTCHAIN — Algorand Savings Tracker
+// ══════════════════════════════════════════
+
+// ── State ──
+const STATE = {
+  address: null,
+  walletBalance: 0,   // microALGO
+  vaultBalance: 0,    // in ALGO (from local state / simulated)
+  transactions: [],
+  appId: null,        // simulated app ID
+};
+
+// Global state (on-chain thresholds)
+const GLOBAL_STATE = {
+  milestones: [
+    { id: 'starter',    name: 'Starter',    emoji: '🌱', threshold: 1   },
+    { id: 'saver',      name: 'Saver',      emoji: '💰', threshold: 10  },
+    { id: 'builder',    name: 'Builder',    emoji: '🏗',  threshold: 50  },
+    { id: 'investor',   name: 'Investor',   emoji: '📈', threshold: 100 },
+    { id: 'guardian',   name: 'Guardian',   emoji: '🛡',  threshold: 250 },
+    { id: 'champion',   name: 'Champion',   emoji: '🏆', threshold: 500 },
+    { id: 'legend',     name: 'Legend',     emoji: '⚡', threshold: 1000},
+    { id: 'vault_lord', name: 'Vault Lord', emoji: '👑', threshold: 5000},
+  ]
+};
+
+// Algo price (mock)
+const ALGO_PRICE_USD = 0.21;
+
+// ── Algorand Client (TestNet via AlgoNode) ──
+let algodClient = null;
+
+function initAlgoClient() {
+  try {
+    const token = '';
+    const server = 'https://testnet-api.algonode.cloud';
+    const port = 443;
+    if (typeof algosdk !== 'undefined') {
+      algodClient = new algosdk.Algodv2(token, server, port);
+    }
+  } catch(e) {
+    console.warn('AlgoSDK not loaded yet, using simulation mode');
+  }
+}
+
+// ── Wallet Connection ──
+async function connectWallet() {
+  showLoading('Connecting to wallet...');
+  await sleep(1200);
+
+  const mockAddresses = [
+    'AAAA7QFJNXHZ6GJKW4XVZFBOHKJ5RTHFIGM4FQTUVPBSPXLMTNXMJIFEM',
+    'B2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7Q8R9S0T1U2V3W4X5Y6Z7AAAAAA',
+    'VCVT4EAISGWV2LNUQBF7WJE2R4PFATWUXYB3MQJD5CGHNKYZSPVX4KT3A',
+  ];
+  STATE.address = mockAddresses[0];
+
+  STATE.walletBalance = (Math.random() * 190 + 10).toFixed(3);
+  STATE.appId = 123456789;
+
+  const saved = loadSavedState();
+  if (saved) {
+    STATE.vaultBalance = saved.vaultBalance || 0;
+    STATE.transactions = saved.transactions || [];
+  }
+
+  hideLoading();
+  showDashboard();
+  toast('✅ Wallet connected to TestNet!', 'success');
+}
+
+function disconnect() {
+  saveSavedState();
+  STATE.address = null;
+  STATE.walletBalance = 0;
+  STATE.vaultBalance = 0;
+  STATE.transactions = [];
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('connect-screen').style.display = 'flex';
+  document.getElementById('disconnect-btn').style.display = 'none';
+}
+
+// ── Dashboard Rendering ──
+function showDashboard() {
+  document.getElementById('connect-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('disconnect-btn').style.display = 'flex';
+
+  const shortAddr = STATE.address.slice(0, 6) + '...' + STATE.address.slice(-4);
+  document.getElementById('wallet-addr-display').textContent = shortAddr;
+  document.getElementById('wallet-avatar').textContent = STATE.address[0];
+  document.getElementById('wallet-balance-display').textContent = parseFloat(STATE.walletBalance).toFixed(3) + ' ALGO';
+
+  renderMilestones();
+  updateUI();
+  renderHistory();
+}
+
+function updateUI() {
+  const balance = STATE.vaultBalance;
+
+  document.getElementById('vault-balance').textContent = balance.toFixed(3);
+  document.getElementById('vault-usd').textContent = '≈ $' + (balance * ALGO_PRICE_USD).toFixed(2) + ' USD';
+
+  const next = getNextMilestone(balance);
+  const prev = getPrevMilestone(balance);
+  const prevThreshold = prev ? prev.threshold : 0;
+  const nextThreshold = next ? next.threshold : GLOBAL_STATE.milestones[GLOBAL_STATE.milestones.length-1].threshold;
+  const range = nextThreshold - prevThreshold;
+  const progress = range > 0 ? ((balance - prevThreshold) / range) * 100 : 100;
+  const pct = Math.min(100, Math.max(0, progress)).toFixed(0);
+
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+
+  if (next) {
+    document.getElementById('next-milestone-label').textContent = `Next: ${next.name} (${next.threshold} ALGO)`;
+    document.getElementById('milestone-status').textContent =
+      `${balance.toFixed(3)} / ${next.threshold} ALGO to unlock ${next.name} badge`;
+  } else {
+    document.getElementById('next-milestone-label').textContent = 'All milestones unlocked! 👑';
+    document.getElementById('milestone-status').textContent = 'You are a Vault Lord!';
+  }
+
+  const txCount = STATE.transactions.length;
+  document.getElementById('stat-deposits').textContent = txCount;
+  const avg = txCount > 0 ? (balance / txCount).toFixed(2) : '—';
+  document.getElementById('stat-avg').textContent = avg !== '—' ? avg : '—';
+  document.getElementById('stat-streak').textContent = Math.min(txCount + 1, 30);
+
+  updateMilestones(balance);
+}
+
+function getNextMilestone(balance) {
+  return GLOBAL_STATE.milestones.find(m => m.threshold > balance) || null;
+}
+function getPrevMilestone(balance) {
+  const unlocked = GLOBAL_STATE.milestones.filter(m => m.threshold <= balance);
+  return unlocked.length ? unlocked[unlocked.length - 1] : null;
+}
+
+function renderMilestones() {
+  const grid = document.getElementById('milestones-grid');
+  grid.innerHTML = GLOBAL_STATE.milestones.map(m => `
+    <div class="milestone" id="milestone-${m.id}">
+      <div class="milestone-badge">${m.emoji}</div>
+      <div class="milestone-name">${m.name}</div>
+      <div class="milestone-threshold">${m.threshold >= 1000 ? (m.threshold/1000)+'k' : m.threshold} ALGO</div>
+    </div>
+  `).join('');
+}
+
+function updateMilestones(balance) {
+  GLOBAL_STATE.milestones.forEach(m => {
+    const el = document.getElementById('milestone-' + m.id);
+    if (!el) return;
+    if (balance >= m.threshold) {
+      if (!el.classList.contains('unlocked')) {
+        el.classList.add('unlocked');
+      }
+    } else {
+      el.classList.remove('unlocked');
+    }
+  });
+}
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (STATE.transactions.length === 0) {
+    list.innerHTML = '<div class="history-empty">No deposits yet. Make your first deposit above.</div>';
+    return;
+  }
+
+  const items = [...STATE.transactions].reverse().slice(0, 20).map(tx => `
+    <div class="tx-item">
+      <div class="tx-left">
+        <div class="tx-icon">↑</div>
+        <div class="tx-meta">
+          <strong>Vault Deposit</strong>
+          <span>${tx.time} · App #${STATE.appId} · ${tx.txid}</span>
+        </div>
+      </div>
+      <div class="tx-amount">+${tx.amount.toFixed(3)} ALGO</div>
+    </div>
+  `).join('');
+  list.innerHTML = items;
+}
+
+async function deposit() {
+  const input = document.getElementById('deposit-amount');
+  const amount = parseFloat(input.value);
+
+  if (!amount || amount <= 0) {
+    toast('⚠️ Enter a valid deposit amount', 'error');
+    input.focus();
+    return;
+  }
+
+  if (amount < 0.1) {
+    toast('⚠️ Minimum deposit is 0.1 ALGO', 'error');
+    return;
+  }
+
+  if (amount > parseFloat(STATE.walletBalance) - 0.1) {
+    toast('⚠️ Insufficient wallet balance (keeping 0.1 ALGO for fees)', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('deposit-btn');
+  const spinner = document.getElementById('deposit-spinner');
+  const btnText = document.getElementById('deposit-btn-text');
+  btn.disabled = true;
+  spinner.style.display = 'block';
+  btnText.textContent = 'Processing...';
+
+  try {
+    showLoading('Building grouped transaction...');
+    await sleep(600);
+
+    updateLoadingText('Signing payment txn...');
+    await sleep(500);
+
+    updateLoadingText('Signing app call txn...');
+    await sleep(500);
+
+    updateLoadingText('Broadcasting to TestNet...');
+    await sleep(700);
+
+    updateLoadingText('Confirming on-chain...');
+    await sleep(800);
+
+    const prevBalance = STATE.vaultBalance;
+    STATE.vaultBalance = parseFloat((STATE.vaultBalance + amount).toFixed(6));
+    STATE.walletBalance = parseFloat((parseFloat(STATE.walletBalance) - amount - 0.001).toFixed(6));
+
+    const txid = generateTxId();
+    const now = new Date();
+    STATE.transactions.push({
+      txid: txid.slice(0, 8) + '...',
+      amount: amount,
+      time: now.toLocaleString('en-IN', { month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' }),
+      timestamp: now.getTime(),
+    });
+
+    hideLoading();
+
+    const newMilestones = GLOBAL_STATE.milestones.filter(
+      m => m.threshold <= STATE.vaultBalance && m.threshold > prevBalance
+    );
+
+    updateUI();
+    renderHistory();
+    document.getElementById('wallet-balance-display').textContent = STATE.walletBalance.toFixed(3) + ' ALGO';
+
+    saveSavedState();
+    input.value = '';
+
+    if (newMilestones.length > 0) {
+      const m = newMilestones[0];
+      toast(`🎉 ${m.emoji} Milestone unlocked: ${m.name}!`, 'success');
+    } else {
+      toast(`✅ +${amount} ALGO deposited! TxID: ${txid.slice(0,8)}...`, 'success');
+    }
+
+  } catch(e) {
+    hideLoading();
+    toast('❌ Transaction failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    btnText.textContent = '⬆ Deposit to Vault';
+  }
+}
+
+async function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = '↻ Syncing...';
+  btn.disabled = true;
+  await sleep(900);
+  document.getElementById('wallet-balance-display').textContent = STATE.walletBalance.toFixed(3) + ' ALGO';
+  updateUI();
+  btn.textContent = '↻ Refresh';
+  btn.disabled = false;
+  toast('🔄 State refreshed from chain', 'success');
+}
+
+function setAmount(val) {
+  document.getElementById('deposit-amount').value = val;
+  document.getElementById('deposit-amount').focus();
+}
+
+function saveSavedState() {
+  try {
+    localStorage.setItem('vaultchain_state', JSON.stringify({
+      vaultBalance: STATE.vaultBalance,
+      transactions: STATE.transactions,
+    }));
+  } catch(e) {}
+}
+
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem('vaultchain_state');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function generateTxId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let id = '';
+  for (let i = 0; i < 52; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function showLoading(text) {
+  document.getElementById('loading-text').textContent = text || 'Processing...';
+  document.getElementById('loading-overlay').classList.add('active');
+}
+
+function updateLoadingText(text) {
+  document.getElementById('loading-text').textContent = text;
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.remove('active');
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.className = '';
+  }, 3500);
+}
+
+initAlgoClient();
+</script>
+</body>
 </html>
