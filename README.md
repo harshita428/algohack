@@ -1,45 +1,94 @@
-# algohack
+# Algohack: Gamified Savings Vault on Algorand
 
-This starter full stack project has been generated using AlgoKit. See below for default getting started instructions.
+A full-stack Algorand dApp prototype for a gamified savings vault. This project combines a smart contract vault backend with a React wallet frontend to help users save ALGO, track goals, and unlock rewards.
+
+## What this project includes
+
+- `projects/algohack-contracts`: Python-based Algorand smart contract source and deployment configuration.
+- `projects/algohack-frontend`: React frontend with Algorand wallet integration via `@txnlab/use-wallet-react`.
+- `projects/algohack-frontend/src/contracts`: generated typed application clients for smart contract interaction.
+- `projects/algohack-contracts/smart_contracts/saving_app`: the starter SavingApp contract, ready to extend into a gamified savings vault.
+
+## Core idea
+
+The gamified savings vault is designed to turn saving into an engaging experience:
+
+- save funds into a vault contract
+- associate deposits with savings goals
+- earn progress milestones or reward tiers
+- interact from a wallet-enabled React frontend
+
+The current template includes a base Algorand smart contract and React wallet UI. You can extend the contract and frontend to implement vault rules, goal tracking, reward logic, and user-friendly saving flows.
+
+## Prerequisites
+
+- Docker
+- AlgoKit CLI
+- Node.js 20+ and npm 9+
+- Python 3.12+
 
 ## Setup
 
-### Initial setup
-1. Clone this repository to your local machine.
-2. Ensure [Docker](https://www.docker.com/) is installed and operational. Then, install `AlgoKit` following this [guide](https://github.com/algorandfoundation/algokit-cli#install).
-3. Run `algokit project bootstrap all` in the project directory. This command sets up your environment by installing necessary dependencies, setting up a Python virtual environment, and preparing your `.env` file.
-4. In the case of a smart contract project, execute `algokit generate env-file -a target_network localnet` from the `algohack-contracts` directory to create a `.env.localnet` file with default configuration for `localnet`.
-5. To build your project, execute `algokit project run build`. This compiles your project and prepares it for running.
-6. For project-specific instructions, refer to the READMEs of the child projects:
-   - Smart Contracts: [algohack-contracts](projects/algohack-contracts/README.md)
-   - Frontend Application: [algohack-frontend](projects/algohack-frontend/README.md)
+1. Clone the repository.
+2. From the repository root, install dependencies with AlgoKit:
+   - `algokit project bootstrap all`
+3. Create the localnet env file for contracts:
+   - `cd projects/algohack-contracts`
+   - `algokit generate env-file -a target_network localnet`
+4. Start LocalNet:
+   - `algokit localnet start`
 
-> This project is structured as a monorepo, refer to the [documentation](https://github.com/algorandfoundation/algokit-cli/blob/main/docs/features/project/run.md) to learn more about custom command orchestration via `algokit project run`.
+## Build and run
 
-### Subsequently
+From the repository root:
 
-1. If you update to the latest source code and there are new dependencies, you will need to run `algokit project bootstrap all` again.
-2. Follow step 3 above.
+1. Build the full workspace:
+   - `algokit project run build`
+2. Deploy the smart contract to localnet:
+   - `algokit project deploy localnet`
+3. Start the frontend:
+   - `cd projects/algohack-frontend`
+   - `npm run dev`
 
-## Tools
+## Project structure
 
-This project makes use of Python and React to build Algorand smart contracts and to provide a base project configuration to develop frontends for your Algorand dApps and interactions with smart contracts. The following tools are in use:
+- `projects/algohack-contracts/`
+  - `pyproject.toml` / `poetry.toml`
+  - `smart_contracts/saving_app/contract.py`
+  - `smart_contracts/saving_app/deploy_config.py`
+- `projects/algohack-frontend/`
+  - `package.json`
+  - `src/App.tsx`
+  - `src/Home.tsx`
+  - `src/utils/network/getAlgoClientConfigs.ts`
 
-- Algorand, AlgoKit, and AlgoKit Utils
-- Python dependencies including Poetry, Black, Ruff or Flake8, mypy, pytest, and pip-audit
-- React and related dependencies including AlgoKit Utils, Tailwind CSS, daisyUI, use-wallet, npm, jest, playwright, Prettier, ESLint, and Github Actions workflows for build validation
+## How it works
 
-### VS Code
+- The backend contract is written in Algorand Python and compiled via AlgoKit.
+- The frontend connects to Algorand wallets using `use-wallet` and sends signed transactions.
+- Typed application clients are generated automatically before building the frontend.
 
-It has also been configured to have a productive dev experience out of the box in [VS Code](https://code.visualstudio.com/), see the [backend .vscode](./backend/.vscode) and [frontend .vscode](./frontend/.vscode) folders for more details.
+## Extend the gamified vault
 
-## Integrating with smart contracts and application clients
+To evolve this template into a full savings vault:
 
-Refer to the [algohack-contracts](projects/algohack-contracts/README.md) folder for overview of working with smart contracts, [projects/algohack-frontend](projects/algohack-frontend/README.md) for overview of the React project and the [projects/algohack-frontend/contracts](projects/algohack-frontend/src/contracts/README.md) folder for README on adding new smart contracts from backend as application clients on your frontend. The templates provided in these folders will help you get started.
-When you compile and generate smart contract artifacts, your frontend component will automatically generate typescript application clients from smart contract artifacts and move them to `frontend/src/contracts` folder, see [`generate:app-clients` in package.json](projects/algohack-frontend/package.json). Afterwards, you are free to import and use them in your frontend application.
+- add deposit / withdraw / claim reward methods in `saving_app/contract.py`
+- store progress and vault state in contract global/local storage
+- add goal tracking and milestone badges in the frontend
+- support multiple wallet providers in `src/App.tsx`
+- generate typed clients with `npm run generate:app-clients`
 
-The frontend starter also provides an example of interactions with your SavingAppClient in [`AppCalls.tsx`](projects/algohack-frontend/src/components/AppCalls.tsx) component by default.
+## Notes
 
-## Next Steps
+- This project is built for LocalNet by default.
+- You can adapt the same workflow to TestNet or MainNet by updating environment configuration and wallet provider settings.
 
-You can take this project and customize it to build your own decentralized applications on Algorand. Make sure to understand how to use AlgoKit and how to write smart contracts for Algorand before you start.
+## Helpful commands
+
+- `algokit project bootstrap all`
+- `algokit localnet start`
+- `algokit project run build`
+- `algokit project deploy localnet`
+- `cd projects/algohack-frontend && npm run dev`
+
+Enjoy building your Algorand-powered gamified savings vault!
