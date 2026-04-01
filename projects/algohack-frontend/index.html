@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/algosdk/2.7.0/algosdk.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root {
     --black: #080808;
@@ -503,8 +502,6 @@
 
   /* History */
   .card-history { grid-column: span 3; }
-  .chart-card { margin-top: 1rem; height: 260px; }
-  #deposit-chart { width: 100%; height: 100%; }
 
   .history-list { margin-top: 1rem; }
   .history-empty {
@@ -694,7 +691,7 @@
     <div class="card card-savings">
       <div class="card-label">Total Vault Balance</div>
       <div class="savings-amount"><span id="vault-balance">0.000</span> <span class="savings-unit">ALGO</span></div>
-      <div class="savings-usd" id="vault-usd">≈ $0.00 USD</div>
+      <div class="savings-usd" id="vault-usd">≈ ₹0.00 INR</div>
       <div class="progress-section">
         <div class="progress-header">
           <span class="progress-label" id="next-milestone-label">Next milestone: Saver (10 ALGO)</span>
@@ -747,8 +744,9 @@
     <!-- Stat: Streak -->
     <div class="card card-stat">
       <div class="card-label">Streak Days</div>
-      <div class="stat-big" id="stat-streak">1</div>
+      <div class="stat-big" id="stat-streak">0</div>
       <div class="stat-sub">consecutive days 🔥</div>
+      <div style="margin-top:8px;font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--muted)" id="streak-timer">—</div>
     </div>
 
     <!-- Milestones -->
@@ -757,12 +755,20 @@
       <div class="milestones-grid" id="milestones-grid"></div>
     </div>
 
+    <!-- Daily Savings Chart -->
+    <div class="card card-history" id="card-chart" style="grid-column:span 3;">
+      <div class="card-label">Daily Savings Activity</div>
+      <div style="margin-top:1rem;position:relative;">
+        <canvas id="daily-chart" height="120" style="width:100%;display:block;"></canvas>
+        <div id="chart-empty" style="text-align:center;padding:2rem;color:var(--muted);font-size:0.8rem;font-family:'DM Mono',monospace;">
+          No data yet — deposits will appear here daily.
+        </div>
+      </div>
+    </div>
+
     <!-- History -->
     <div class="card card-history">
       <div class="card-label">Deposit History</div>
-      <div class="chart-card">
-        <canvas id="deposit-chart"></canvas>
-      </div>
       <div class="history-list" id="history-list">
         <div class="history-empty">No deposits yet. Make your first deposit above.</div>
       </div>
@@ -788,10 +794,14 @@
 // ── State ──
 const STATE = {
   address: null,
-  walletBalance: 0,   // microALGO
-  vaultBalance: 0,    // in ALGO (from local state / simulated)
+  walletBalance: 0,
+  vaultBalance: 0,
   transactions: [],
-  appId: null,        // simulated app ID
+  appId: null,
+  // Streak tracking
+  streakCount: 0,
+  lastDepositTimestamp: null,   // ms epoch of most recent deposit
+  streakWindowStart: null,      // ms epoch when the current 24-hr window started
 };
 
 // Global state (on-chain thresholds)
@@ -808,12 +818,11 @@ const GLOBAL_STATE = {
   ]
 };
 
-// Algo price (mock)
-const ALGO_PRICE_USD = 0.21;
+// Algo price (mock INR)
+const ALGO_PRICE_INR = 10;
 
 // ── Algorand Client (TestNet via AlgoNode) ──
 let algodClient = null;
-let depositChart = null;
 
 function initAlgoClient() {
   try {
@@ -847,6 +856,9 @@ async function connectWallet() {
   if (saved) {
     STATE.vaultBalance = saved.vaultBalance || 0;
     STATE.transactions = saved.transactions || [];
+    STATE.streakCount = saved.streakCount || 0;
+    STATE.lastDepositTimestamp = saved.lastDepositTimestamp || null;
+    STATE.streakWindowStart = saved.streakWindowStart || null;
   }
 
   hideLoading();
@@ -860,6 +872,9 @@ function disconnect() {
   STATE.walletBalance = 0;
   STATE.vaultBalance = 0;
   STATE.transactions = [];
+  STATE.streakCount = 0;
+  STATE.lastDepositTimestamp = null;
+  STATE.streakWindowStart = null;
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('connect-screen').style.display = 'flex';
   document.getElementById('disconnect-btn').style.display = 'none';
@@ -879,14 +894,14 @@ function showDashboard() {
   renderMilestones();
   updateUI();
   renderHistory();
-  updateChart();
+  setTimeout(renderDailyChart, 50);
 }
 
 function updateUI() {
   const balance = STATE.vaultBalance;
 
   document.getElementById('vault-balance').textContent = balance.toFixed(3);
-  document.getElementById('vault-usd').textContent = '≈ $' + (balance * ALGO_PRICE_USD).toFixed(2) + ' USD';
+  document.getElementById('vault-usd').textContent = '≈ ₹' + (balance * ALGO_PRICE_INR).toFixed(2) + ' INR';
 
   const next = getNextMilestone(balance);
   const prev = getPrevMilestone(balance);
@@ -912,10 +927,10 @@ function updateUI() {
   document.getElementById('stat-deposits').textContent = txCount;
   const avg = txCount > 0 ? (balance / txCount).toFixed(2) : '—';
   document.getElementById('stat-avg').textContent = avg !== '—' ? avg : '—';
-  document.getElementById('stat-streak').textContent = calculateStreak();
 
+  updateStreakDisplay();
   updateMilestones(balance);
-  updateChart();
+  renderDailyChart();
 }
 
 function getNextMilestone(balance) {
@@ -964,7 +979,7 @@ function renderHistory() {
         <div class="tx-icon">↑</div>
         <div class="tx-meta">
           <strong>Vault Deposit</strong>
-          <span>${tx.dateLabel || tx.time} · App #${STATE.appId} · ${tx.txid}</span>
+          <span>${tx.time} · App #${STATE.appId} · ${tx.txid}</span>
         </div>
       </div>
       <div class="tx-amount">+${tx.amount.toFixed(3)} ALGO</div>
@@ -973,6 +988,7 @@ function renderHistory() {
   list.innerHTML = items;
 }
 
+// ── Deposit Flow ──
 async function deposit() {
   const input = document.getElementById('deposit-amount');
   const amount = parseFloat(input.value);
@@ -1022,15 +1038,14 @@ async function deposit() {
 
     const txid = generateTxId();
     const now = new Date();
-    const isoDate = formatLocalDate(now);
     STATE.transactions.push({
       txid: txid.slice(0, 8) + '...',
       amount: amount,
-      date: isoDate,
-      dateLabel: formatDisplayDate(now),
       time: now.toLocaleString('en-IN', { month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' }),
       timestamp: now.getTime(),
     });
+
+    computeStreak(now.getTime());
 
     hideLoading();
 
@@ -1079,11 +1094,240 @@ function setAmount(val) {
   document.getElementById('deposit-amount').focus();
 }
 
+// ── Streak Logic (24-hr window) ──
+// Rules:
+//   • A "streak day" = at least 1 deposit within a rolling 24-hr window.
+//   • When you make a deposit:
+//       - If no previous deposit → streak = 1, window starts now.
+//       - If within the same 24-hr window → streak unchanged (already counted).
+//       - If within the NEXT 24-hr window (24h–48h after window start) → streak++, new window starts now.
+//       - If more than 48 h have passed since window start → streak resets to 1.
+//   • Countdown shows how many hours/minutes remain in the current window.
+
+function computeStreak(now) {
+  const last = STATE.lastDepositTimestamp;
+  const winStart = STATE.streakWindowStart;
+
+  if (!last || !winStart) {
+    STATE.streakCount = 1;
+    STATE.lastDepositTimestamp = now;
+    STATE.streakWindowStart = now;
+    return;
+  }
+
+  const elapsed = now - winStart;
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const TWO_DAYS = 48 * 60 * 60 * 1000;
+
+  if (elapsed < ONE_DAY) {
+    STATE.lastDepositTimestamp = now;
+  } else if (elapsed < TWO_DAYS) {
+    STATE.streakCount += 1;
+    STATE.lastDepositTimestamp = now;
+    STATE.streakWindowStart = now;
+  } else {
+    STATE.streakCount = 1;
+    STATE.lastDepositTimestamp = now;
+    STATE.streakWindowStart = now;
+  }
+}
+
+function updateStreakDisplay() {
+  const el = document.getElementById('stat-streak');
+  const timerEl = document.getElementById('streak-timer');
+
+  el.textContent = STATE.streakCount || 0;
+
+  const winStart = STATE.streakWindowStart;
+  if (!winStart) {
+    timerEl.textContent = 'deposit to start streak';
+    timerEl.style.color = 'var(--muted)';
+    return;
+  }
+
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const TWO_DAYS = 48 * 60 * 60 * 1000;
+  const now = Date.now();
+  const elapsed = now - winStart;
+
+  if (elapsed < ONE_DAY) {
+    const deadline = winStart + TWO_DAYS;
+    const remaining = deadline - now;
+    timerEl.textContent = '⏳ next deposit within ' + formatCountdown(remaining);
+    timerEl.style.color = remaining < 4 * 60 * 60 * 1000 ? 'var(--red)' : 'var(--muted)';
+  } else if (elapsed < TWO_DAYS) {
+    const deadline = winStart + TWO_DAYS;
+    const remaining = deadline - now;
+    timerEl.textContent = '🚨 deposit now! ' + formatCountdown(remaining) + ' left';
+    timerEl.style.color = 'var(--red)';
+  } else {
+    timerEl.textContent = 'streak broken — deposit to restart';
+    timerEl.style.color = 'var(--red)';
+  }
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return '0h 0m';
+  const h = Math.floor(ms / (60 * 60 * 1000));
+  const m = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+  return h + 'h ' + m + 'm';
+}
+
+setInterval(() => {
+  if (STATE.address) {
+    updateStreakDisplay();
+    const winStart = STATE.streakWindowStart;
+    if (winStart) {
+      const TWO_DAYS = 48 * 60 * 60 * 1000;
+      if (Date.now() - winStart > TWO_DAYS) {
+        STATE.streakCount = 0;
+        document.getElementById('stat-streak').textContent = '0';
+        saveSavedState();
+      }
+    }
+  }
+}, 60 * 1000);
+
+// ── Daily Chart ──
+function renderDailyChart() {
+  const canvas = document.getElementById('daily-chart');
+  const emptyEl = document.getElementById('chart-empty');
+  const txs = STATE.transactions;
+
+  if (txs.length === 0) {
+    canvas.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  emptyEl.style.display = 'none';
+
+  const dayMap = {};
+  txs.forEach(tx => {
+    const d = new Date(tx.timestamp);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    dayMap[key] = (dayMap[key] || 0) + tx.amount;
+  });
+
+  const today = new Date();
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    days.push({ key, label: String(d.getDate()), month: d.toLocaleString('en',{month:'short'}), value: dayMap[key] || 0 });
+  }
+
+  const firstDepositDay = days.findIndex(d => d.value > 0);
+  const visibleDays = firstDepositDay === -1 ? days.slice(-7) : days.slice(Math.max(0, firstDepositDay - 1));
+
+  const W = canvas.offsetWidth || 800;
+  const H = 120;
+  canvas.width = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD_L = 44, PAD_R = 16, PAD_T = 16, PAD_B = 32;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  const vals = visibleDays.map(d => d.value);
+  const maxVal = Math.max(...vals, 0.001);
+
+  const n = visibleDays.length;
+  const step = n > 1 ? chartW / (n - 1) : chartW;
+
+  const xOf = i => PAD_L + (n > 1 ? i * step : chartW / 2);
+  const yOf = v => PAD_T + chartH - (v / maxVal) * chartH;
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for (let g = 0; g <= 4; g++) {
+    const y = PAD_T + (g / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+  }
+
+  ctx.fillStyle = 'rgba(160,160,160,0.6)';
+  ctx.font = '9px DM Mono, monospace';
+  ctx.textAlign = 'right';
+  for (let g = 0; g <= 2; g++) {
+    const v = (maxVal * (1 - g / 2));
+    const y = PAD_T + (g / 2) * chartH;
+    ctx.fillText(v >= 1 ? v.toFixed(0) : v.toFixed(1), PAD_L - 6, y + 3);
+  }
+
+  if (n < 2) {
+    const x = xOf(0), y = yOf(vals[0]);
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(201,168,76,0.9)';
+    ctx.fill();
+  } else {
+    const grad = ctx.createLinearGradient(0, PAD_T, 0, PAD_T + chartH);
+    grad.addColorStop(0, 'rgba(201,168,76,0.22)');
+    grad.addColorStop(1, 'rgba(201,168,76,0.01)');
+
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), PAD_T + chartH);
+    visibleDays.forEach((d, i) => ctx.lineTo(xOf(i), yOf(d.value)));
+    ctx.lineTo(xOf(n-1), PAD_T + chartH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(201,168,76,0.85)';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    visibleDays.forEach((d, i) => {
+      if (i === 0) ctx.moveTo(xOf(i), yOf(d.value));
+      else ctx.lineTo(xOf(i), yOf(d.value));
+    });
+    ctx.stroke();
+
+    visibleDays.forEach((d, i) => {
+      if (d.value === 0) return;
+      const x = xOf(i), y = yOf(d.value);
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'var(--gold-light, #e8c97a)';
+      ctx.fill();
+      ctx.fillStyle = 'rgba(232,201,122,0.9)';
+      ctx.font = 'bold 9px DM Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(d.value.toFixed(1), x, y - 8);
+    });
+  }
+
+  ctx.fillStyle = 'rgba(160,160,160,0.55)';
+  ctx.font = '9px DM Mono, monospace';
+  ctx.textAlign = 'center';
+  const labelEvery = n <= 10 ? 1 : n <= 20 ? 2 : 5;
+  visibleDays.forEach((d, i) => {
+    if (i % labelEvery !== 0 && i !== n - 1) return;
+    const showMonth = i === 0 || d.label === '1';
+    const txt = showMonth ? d.month + ' ' + d.label : d.label;
+    ctx.fillText(txt, xOf(i), H - 6);
+  });
+}
+
+let chartResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(chartResizeTimer);
+  chartResizeTimer = setTimeout(() => { if (STATE.address) renderDailyChart(); }, 200);
+});
+
+// ── Persistence ──
 function saveSavedState() {
   try {
     localStorage.setItem('vaultchain_state', JSON.stringify({
       vaultBalance: STATE.vaultBalance,
       transactions: STATE.transactions,
+      streakCount: STATE.streakCount,
+      lastDepositTimestamp: STATE.lastDepositTimestamp,
+      streakWindowStart: STATE.streakWindowStart,
     }));
   } catch(e) {}
 }
@@ -1091,23 +1335,11 @@ function saveSavedState() {
 function loadSavedState() {
   try {
     const raw = localStorage.getItem('vaultchain_state');
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (parsed?.transactions) {
-      parsed.transactions = parsed.transactions.map(tx => {
-        if (!tx.date) {
-          tx.date = tx.timestamp ? formatLocalDate(new Date(tx.timestamp)) : formatLocalDate(new Date());
-        }
-        if (!tx.dateLabel) {
-          const dateValue = tx.date ? new Date(tx.date) : new Date();
-          tx.dateLabel = formatDisplayDate(dateValue);
-        }
-        return tx;
-      });
-    }
-    return parsed;
+    return raw ? JSON.parse(raw) : null;
   } catch(e) { return null; }
 }
 
+// ── Helpers ──
 function generateTxId() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   let id = '';
@@ -1132,112 +1364,6 @@ function hideLoading() {
   document.getElementById('loading-overlay').classList.remove('active');
 }
 
-function formatLocalDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatDisplayDate(date) {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
-function getPreviousDate(isoDate) {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() - 1);
-  return formatLocalDate(date);
-}
-
-function calculateStreak() {
-  const uniqueDates = [...new Set(STATE.transactions.map(tx => tx.date || formatLocalDate(new Date(tx.timestamp))))]
-    .sort((a, b) => b.localeCompare(a));
-
-  if (uniqueDates.length === 0) return 0;
-
-  let streak = 1;
-  let current = uniqueDates[0];
-
-  for (let i = 1; i < uniqueDates.length; i++) {
-    const previous = getPreviousDate(current);
-    if (uniqueDates[i] === previous) {
-      streak += 1;
-      current = uniqueDates[i];
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-}
-
-function initChart() {
-  const canvas = document.getElementById('deposit-chart');
-  if (!canvas) return;
-
-  const ctx = canvas.getContext('2d');
-  depositChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Deposit Amount (ALGO)',
-        data: [],
-        backgroundColor: 'rgba(201,168,76,0.75)',
-        borderColor: 'rgba(201,168,76,1)',
-        borderWidth: 1,
-        borderRadius: 8,
-        barPercentage: 0.7,
-        categoryPercentage: 0.7,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: '#a0a0a0', font: { family: 'DM Mono', size: 12 } }
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.08)' },
-          ticks: {
-            color: '#a0a0a0',
-            font: { family: 'DM Mono', size: 12 },
-            callback: value => value + ' ALGO'
-          }
-        }
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#121212',
-          titleColor: '#fff',
-          bodyColor: '#fff',
-          borderColor: '#c9a84c',
-          borderWidth: 1,
-          callbacks: {
-            label: context => `${context.formattedValue} ALGO`
-          }
-        }
-      }
-    }
-  });
-}
-
-function updateChart() {
-  if (!depositChart) return;
-  const sorted = [...STATE.transactions].sort((a, b) => a.timestamp - b.timestamp);
-  depositChart.data.labels = sorted.map(tx => tx.dateLabel || formatDisplayDate(new Date(tx.timestamp)));
-  depositChart.data.datasets[0].data = sorted.map(tx => tx.amount);
-  depositChart.update();
-}
-
 let toastTimer;
 function toast(msg, type = '') {
   const el = document.getElementById('toast');
@@ -1249,8 +1375,8 @@ function toast(msg, type = '') {
   }, 3500);
 }
 
+// ── Init ──
 initAlgoClient();
-initChart();
 </script>
 </body>
 </html>
